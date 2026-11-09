@@ -1,0 +1,29 @@
+# 运行时数据：含本机对话正文 / 绝对路径，禁止上传
+data/
+exports/
+backup/
+*.db
+*.db-shm
+*.db-wal
+*.log
+selftest.json
+
+# 本机侦察报告（含用户目录结构）
+tools/probe_report.json
+tools/deep_report.txt
+tools/containers_report.txt
+
+# 构建产物（生成的 exe 与 PyInstaller 中间文件）
+AgentSessionHub.exe
+*.spec
+build/
+build_desktop/
+dist/
+*.exe
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# WorkBuddy 工作区数据
+.workbuddy/

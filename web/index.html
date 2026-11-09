@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Agent 会话管理台</title>
+<style>
+:root{
+  --bg:#0d1016; --panel:#151922; --panel2:#1b202b; --line:#262d3a;
+  --text:#e7ebf3; --muted:#8b95a8; --dim:#5d6678;
+  --accent:#5b8cff; --accent2:#7c5cff; --green:#2ecc8f; --amber:#f0b458; --red:#ef6b73;
+  --radius:12px; --shadow:0 8px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+a{color:var(--accent);text-decoration:none}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#303849;border-radius:8px}
+::-webkit-scrollbar-track{background:transparent}
+
+.app{display:flex;min-height:100vh}
+.sidebar{width:226px;flex:none;background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;z-index:20}
+.brand{padding:22px 20px 16px;border-bottom:1px solid var(--line)}
+.brand h1{margin:0;font-size:17px;letter-spacing:.4px}
+.brand p{margin:4px 0 0;font-size:11px;color:var(--dim)}
+.nav{padding:12px 10px;flex:1;overflow:auto}
+.nav button{display:flex;align-items:center;gap:11px;width:100%;padding:10px 12px;margin-bottom:3px;
+  background:none;border:0;border-radius:9px;color:var(--muted);text-align:left;font-size:13.5px}
+.nav button:hover{background:var(--panel2);color:var(--text)}
+.nav button.on{background:linear-gradient(90deg,rgba(91,140,255,.18),rgba(124,92,255,.08));
+  color:#fff;box-shadow:inset 2px 0 0 var(--accent)}
+.nav .ico{width:19px;text-align:center;font-size:15px}
+.sidefoot{padding:14px 18px;border-top:1px solid var(--line);font-size:11px;color:var(--dim);line-height:1.7}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:6px}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{height:62px;flex:none;display:flex;align-items:center;gap:14px;padding:0 24px;
+  border-bottom:1px solid var(--line);background:rgba(13,16,22,.92);backdrop-filter:blur(10px);
+  position:sticky;top:0;z-index:15}
+.topbar h2{font-size:16px;margin:0;font-weight:600;flex:1}
+.burger{display:none;background:none;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.badge{font-size:11.5px;padding:5px 10px;border-radius:20px;background:var(--panel2);
+  border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.badge.ok{color:var(--green);border-color:rgba(46,204,143,.3)}
+.badge.warn{color:var(--amber);border-color:rgba(240,180,88,.35)}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 14px;
+  font-size:12.5px;transition:.15s;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:#fff}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:0;color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.12)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:5px 10px;font-size:11.5px}
+.content{padding:24px;max-width:1500px;width:100%;margin:0 auto}
+.view{display:none;animation:fade .25s ease}
+.view.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+.kpi .lab{font-size:12px;color:var(--muted)}
+.kpi .val{font-size:27px;font-weight:700;margin:6px 0 2px;letter-spacing:-.5px}
+.kpi .sub{font-size:11px;color:var(--dim)}
+.kpi.a .val{color:var(--accent)} .kpi.b .val{color:var(--green)}
+.kpi.c .val{color:var(--accent2)} .kpi.d .val{color:var(--amber)}
+
+.grid2{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;margin-bottom:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px}
+.card h3{margin:0 0 4px;font-size:14px;font-weight:600}
+.card .hint{font-size:11.5px;color:var(--dim);margin:0 0 16px}
+.bars{display:flex;align-items:flex-end;gap:3px;height:110px;margin-top:12px}
+.bars .b{flex:1;background:linear-gradient(180deg,var(--accent),rgba(91,140,255,.25));
+  border-radius:3px 3px 0 0;min-height:2px;position:relative}
+.bars .b:hover{background:var(--accent)}
+.bars .b span{display:none}
+.axis{display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim);margin-top:8px}
+.hbar{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px}
+.hbar .nm{width:130px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.hbar .tr{flex:1;height:8px;background:var(--panel2);border-radius:6px;overflow:hidden}
+.hbar .fl{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.hbar .vl{width:78px;text-align:right;flex:none;color:var(--dim);font-size:11px}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:16px}
+.inp,select.inp{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  padding:9px 12px;outline:none;font-size:12.5px;min-width:0}
+.inp:focus{border-color:var(--accent)}
+.inp.search{flex:1;min-width:190px}
+select.inp{max-width:190px}
+
+.list{display:flex;flex-direction:column;gap:9px}
+.row{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+  cursor:pointer;transition:.15s}
+.row:hover{border-color:#3c5a9e;background:var(--panel2);transform:translateX(2px)}
+.row .t{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.row .title{font-size:14px;font-weight:600;flex:1;min-width:180px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.row .pv{font-size:12px;color:var(--muted);margin-top:6px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.row .meta{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--dim);margin-top:8px}
+.tag{font-size:10.5px;padding:2px 8px;border-radius:5px;background:var(--panel2);
+  border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.tag.full{color:var(--green);border-color:rgba(46,204,143,.3);background:rgba(46,204,143,.08)}
+.tag.meta{color:var(--amber);border-color:rgba(240,180,88,.3);background:rgba(240,180,88,.08)}
+.tag.agg{color:var(--dim)}
+.pager{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:18px;
+  font-size:12px;color:var(--muted)}
+
+.empty{text-align:center;padding:48px 20px;color:var(--dim);font-size:13px}
+.empty .big{font-size:34px;margin-bottom:10px;opacity:.5}
+mark{background:rgba(240,180,88,.25);color:var(--amber);padding:0 2px;border-radius:3px}
+
+.drawer{position:fixed;top:0;right:0;width:min(680px,100vw);height:100vh;background:var(--bg);
+  border-left:1px solid var(--line);box-shadow:var(--shadow);z-index:60;display:none;flex-direction:column}
+.drawer.on{display:flex}
+.drawer .dh{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
+.drawer .dh h3{margin:0;font-size:15px;flex:1;line-height:1.5}
+.drawer .dmeta{padding:12px 20px;border-bottom:1px solid var(--line);font-size:11.5px;
+  color:var(--muted);display:flex;flex-wrap:wrap;gap:8px 18px}
+.drawer .dbody{flex:1;overflow:auto;padding:18px 20px}
+.msg{margin-bottom:16px;max-width:94%}
+.msg.user{margin-left:auto}
+.msg .mh{font-size:11px;color:var(--dim);margin-bottom:5px;display:flex;gap:8px}
+.msg.user .mh{justify-content:flex-end}
+.msg .mb{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 14px;
+  white-space:pre-wrap;word-break:break-word;font-size:12.8px;line-height:1.72;max-height:520px;overflow:auto}
+.msg.user .mb{background:rgba(91,140,255,.12);border-color:rgba(91,140,255,.28)}
+.msg.assistant .mb{background:var(--panel)}
+.close{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  width:30px;height:30px;flex:none;font-size:16px;line-height:1}
+
+.srcgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:13px}
+.src{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px}
+.src .h{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.src .av{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;
+  font-size:13px;font-weight:700;color:#fff;flex:none}
+.src .nm{font-size:13.5px;font-weight:600;flex:1}
+.src .stats{display:flex;gap:16px;font-size:11.5px;color:var(--muted);margin:10px 0}
+.src .stats b{display:block;color:var(--text);font-size:14px;font-weight:600}
+.src .path{font-size:10.5px;color:var(--dim);word-break:break-all;line-height:1.5;
+  border-top:1px solid var(--line);padding-top:9px;margin-top:9px}
+.src .note{font-size:11px;color:var(--muted);margin-top:7px}
+.src .foot{display:flex;gap:8px;margin-top:11px}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-weight:500;font-size:11px}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.help h3{margin:22px 0 8px;font-size:14px;color:var(--accent)}
+.help p,.help li{font-size:13px;color:var(--muted);line-height:1.85}
+.help code{background:var(--panel2);border:1px solid var(--line);padding:2px 6px;
+  border-radius:5px;font-size:12px;color:var(--amber)}
+.help .warnbox{background:rgba(240,180,88,.07);border:1px solid rgba(240,180,88,.25);
+  border-radius:10px;padding:14px 18px;margin:14px 0}
+.progress{height:4px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:10px}
+.progress i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px 20px;
+  font-size:12.5px;box-shadow:var(--shadow);z-index:99;opacity:0;transition:.3s}
+.toast.on{transform:translateX(-50%) translateY(0);opacity:1}
+
+/* 清理页 */
+.warnbox.danger{background:rgba(239,107,115,.07);border:1px solid rgba(239,107,115,.35);
+  border-radius:10px;padding:15px 18px;margin-bottom:16px}
+.warnbox.danger b{color:var(--red);font-size:13.5px}
+.warnbox.danger p{font-size:12px;color:var(--muted);line-height:1.8;margin:8px 0 0}
+.tag.r-low{color:var(--green);border-color:rgba(46,204,143,.3);background:rgba(46,204,143,.08)}
+.tag.r-medium{color:var(--amber);border-color:rgba(240,180,88,.3);background:rgba(240,180,88,.08)}
+.tag.r-high{color:#ff9d5c;border-color:rgba(255,157,92,.3);background:rgba(255,157,92,.08)}
+.tag.r-critical{color:var(--red);border-color:rgba(239,107,115,.35);background:rgba(239,107,115,.09)}
+.tag.protected{color:var(--dim)}
+.chk{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}
+.chk:disabled{cursor:not-allowed;opacity:.4}
+.pathcell{font-size:11px;color:var(--muted);word-break:break-all;max-width:480px;line-height:1.5}
+.cellsub{font-size:10.5px;color:var(--dim);margin-top:2px}
+.selbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);
+  background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:9px 13px;margin-bottom:12px}
+.selbar b{color:var(--amber)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:80;display:none;
+  align-items:center;justify-content:center;padding:18px}
+.modal.on{display:flex}
+.mbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  width:min(780px,100%);max-height:88vh;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.mbox .mh{padding:17px 20px;border-bottom:1px solid var(--line)}
+.mbox .mh h3{margin:0;font-size:15px;color:var(--red)}
+.mbox .mb{padding:15px 20px;overflow:auto;flex:1;font-size:12.5px;color:var(--muted);line-height:1.8}
+.mbox .mf{padding:13px 20px;border-top:1px solid var(--line);display:flex;gap:9px;
+  align-items:center;flex-wrap:wrap}
+.plist{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin:10px 0}
+.plist .pi{padding:8px 11px;border-bottom:1px solid var(--line);font-size:11px;
+  word-break:break-all;color:var(--text);background:var(--panel2)}
+.plist .pi:last-child{border-bottom:0}
+.okbox{background:rgba(46,204,143,.08);border:1px solid rgba(46,204,143,.3);
+  border-radius:9px;padding:11px 14px;margin:10px 0;font-size:12px;color:var(--text)}
+
+/* 扫描转圈动画 */
+.spin{display:inline-block;width:13px;height:13px;flex:none;border:2px solid currentColor;
+  border-right-color:transparent;border-radius:50%;opacity:.9;
+  animation:spin .7s linear infinite;vertical-align:-2px;margin-right:7px}
+.spin.lg{width:26px;height:26px;border-width:3px;margin-right:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn.scanning{opacity:.88;cursor:progress}
+.badge.warn .spin{color:var(--amber)}
+.scanning-row{display:flex;align-items:center;justify-content:center;gap:13px;
+  padding:46px 18px;color:var(--muted);font-size:13px}
+@media(prefers-reduced-motion:reduce){.spin{animation-duration:1.6s}}
+
+@media(max-width:1000px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .grid2{grid-template-columns:1fr}
+}
+@media(max-width:760px){
+  .sidebar{position:fixed;left:-240px;top:0;transition:left .25s;box-shadow:var(--shadow)}
+  .sidebar.on{left:0}
+  .burger{display:block}
+  .content{padding:15px}
+  .topbar{padding:0 14px;height:56px}
+  .topbar h2{font-size:14px}
+  .kpis{gap:9px}
+  .kpi{padding:13px}
+  .kpi .val{font-size:21px}
+  .hbar .nm{width:90px}
+  .srcgrid{grid-template-columns:1fr}
+  .topbar .badge{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <h1>⚙️ Agent 会话管理台</h1>
+      <p>本机会话聚合 · 桌面版 · 只读识别</p>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-v="overview" class="on"><span class="ico">▦</span>总览</button>
+      <button data-v="sessions"><span class="ico">☰</span>会话</button>
+      <button data-v="search"><span class="ico">⌕</span>全文搜索</button>
+      <button data-v="sources"><span class="ico">◈</span>来源识别</button>
+      <button data-v="storage"><span class="ico">▤</span>占用分析</button>
+      <button data-v="cleanup"><span class="ico">⌫</span>清理</button>
+      <button data-v="help"><span class="ico">?</span>使用说明</button>
+    </nav>
+    <div class="sidefoot">
+      <span class="dot"></span>只读模式 · 不改动源数据<br>
+      <span id="foot-stat">等待扫描…</span>
+      <div style="margin-top:10px"><button class="btn sm" data-act="quit">退出软件</button></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="burger" id="burger">☰</button>
+      <h2 id="pageTitle">总览</h2>
+      <span class="badge" id="scanBadge">就绪</span>
+      <button class="btn primary" id="btnScan"><span class="spin" id="scanSpin" style="display:none"></span><span id="scanBtnText">重新扫描</span></button>
+    </header>
+    <div class="content">
+
+      <!-- 总览 -->
+      <section class="view on" id="v-overview">
+        <div class="kpis">
+          <div class="kpi a"><div class="lab">识别到的数据来源</div><div class="val" id="k1">—</div><div class="sub" id="k1s">个客户端目录</div></div>
+          <div class="kpi b"><div class="lab">会话总数</div><div class="val" id="k2">—</div><div class="sub" id="k2s">跨工具统一索引</div></div>
+          <div class="kpi c"><div class="lab">已索引消息</div><div class="val" id="k3">—</div><div class="sub" id="k3s">条可检索对话</div></div>
+          <div class="kpi d"><div class="lab">本机数据体量</div><div class="val" id="k4">—</div><div class="sub" id="k4s">文件总数</div></div>
+        </div>
+        <div class="grid2">
+          <div class="card">
+            <h3>近 30 天会话活动</h3><p class="hint">按会话最后更新时间统计</p>
+            <div class="bars" id="timeline"></div>
+            <div class="axis"><span id="tl-start">—</span><span>今天</span></div>
+          </div>
+          <div class="card">
+            <h3>来源分布</h3><p class="hint">按索引会话数排序</p>
+            <div id="srcBars"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>最近会话</h3><p class="hint">点击任意一行查看完整对话</p>
+          <div class="list" id="recent"></div>
+        </div>
+      </section>
+
+      <!-- 会话 -->
+      <section class="view" id="v-sessions">
+        <div class="toolbar">
+          <input class="inp search" id="fq" placeholder="搜索标题 / 项目 / 预览…">
+          <select class="inp" id="fsource"><option value="">全部来源</option></select>
+          <select class="inp" id="fdays">
+            <option value="0">全部时间</option><option value="7">近 7 天</option>
+            <option value="30">近 30 天</option><option value="90">近 90 天</option>
+          </select>
+          <select class="inp" id="fsort">
+            <option value="updated">最近更新</option><option value="created">创建时间</option>
+            <option value="size">占用体积</option><option value="messages">消息数</option>
+            <option value="title">标题</option>
+          </select>
+          <button class="btn" id="btnExport">导出当前</button>
+        </div>
+        <div class="list" id="sessionList"></div>
+        <div class="pager" id="pager"></div>
+      </section>
+
+      <!-- 搜索 -->
+      <section class="view" id="v-search">
+        <div class="toolbar">
+          <input class="inp search" id="sq" placeholder="搜索对话正文（支持多个词，空格分隔）…" style="font-size:14px;padding:12px 14px">
+          <button class="btn primary" id="btnSearch">搜索</button>
+        </div>
+        <div class="card" style="padding:0">
+          <div class="list" id="searchResults" style="padding:14px"></div>
+        </div>
+      </section>
+
+      <!-- 来源 -->
+      <section class="view" id="v-sources">
+        <div class="toolbar">
+          <span class="badge" id="regCount">—</span>
+          <button class="btn" id="btnScanAll">扫描全部来源</button>
+        </div>
+        <div class="srcgrid" id="srcGrid"></div>
+      </section>
+
+      <!-- 占用 -->
+      <section class="view" id="v-storage">
+        <div class="grid2">
+          <div class="card"><h3>按来源</h3><p class="hint">会话文件占用（不含缓存/日志）</p><div id="stSource"></div></div>
+          <div class="card"><h3>按项目</h3><p class="hint">已标记工作区的项目</p><div id="stProject"></div></div>
+        </div>
+        <div class="grid2">
+          <div class="card"><h3>最旧的会话</h3><p class="hint">清理优先级参考，本工具不执行删除</p>
+            <table id="stOldest"></table></div>
+          <div class="card"><h3>按月分布</h3><p class="hint">会话数量与体积</p><table id="stMonth"></table></div>
+        </div>
+        <div class="card"><h3>未解析对话的数据资产</h3>
+          <p class="hint">仅统计目录体量；这些工具的对话正文尚未建立索引</p>
+          <table id="stAssets"></table></div>
+      </section>
+
+      <!-- 清理 -->
+      <section class="view" id="v-cleanup">
+        <div class="warnbox danger">
+          <b>⚠️ 此操作非常危险，可能导致不可逆的数据丢失！</b>
+          <p>本页默认<b>只读分析</b>，不会自动清理任何文件。执行清理需要：逐项勾选 → 核对完整路径 → 输入确认词；执行前会完整备份到 <code>backup/quarantine/</code>，再把原文件移入 Windows 回收站，之后可按批次还原。强烈建议先关闭对应的 Agent 客户端。身份文件、登录状态、本工具目录与系统个人目录一律受保护。</p>
+          <div id="cleanupMode" style="margin-top:10px"></div>
+        </div>
+        <div class="kpis" id="cleanupKpis"></div>
+        <div class="toolbar">
+          <button class="btn primary" id="btnCleanupScan"><span class="spin" id="cleanupSpin" style="display:none"></span><span id="cleanupBtnText">重新分析（只读）</span></button>
+          <select class="inp" id="cCat">
+            <option value="">全部类别</option><option value="session">会话记录</option>
+            <option value="memory">记忆文件</option><option value="cache">缓存 / 日志</option>
+            <option value="database">会话数据库</option>
+          </select>
+          <select class="inp" id="cRisk">
+            <option value="">全部风险</option><option value="low">低</option>
+            <option value="medium">中</option><option value="high">高</option>
+            <option value="critical">极高</option>
+          </select>
+          <input class="inp search" id="cQ" placeholder="按路径筛选…">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
+            <input type="checkbox" id="cSuggested" class="chk"> 只看建议项</label>
+        </div>
+        <div class="selbar">
+          <label style="display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="cAll" class="chk"> 全选本页可清理项</label>
+          <span id="cleanupSel">已选 <b>0</b> 项 · <b>0 B</b></span>
+          <span style="flex:1"></span>
+          <button class="btn" id="btnCleanupPlan" disabled>生成清理计划</button>
+        </div>
+        <div class="card" style="padding:0;overflow:auto"><table id="cleanupTable"></table></div>
+        <div class="pager" id="cleanupPager"></div>
+        <div class="card">
+          <h3>历史批次与还原</h3><p class="hint">备份保留在 backup/quarantine/，可随时按批次还原</p>
+          <table id="cleanupHistory"></table>
+        </div>
+      </section>
+
+      <!-- 帮助 -->
+      <section class="view help" id="v-help">
+        <div class="card">
+          <h3>这个工具做什么</h3>
+          <p>扫描本机各个 AI Agent 客户端（WorkBuddy、Claude Code、Codex、Qoder、TRAE、CodeBuddy、Devin 等）落地在用户目录与 AppData 下的会话、消息与数据文件，把不同格式归一成统一的会话索引，在这个独立桌面窗口里查看、搜索、分析占用与导出。全部功能都不需要浏览器或网址。启动时（或点顶栏「重新扫描」）会做<b>一次统一识别</b>，同时生成会话索引与清理候选，两处数据同步就绪。</p>
+          <div class="warnbox"><b>⚠️ 只读承诺：</b>本工具对源文件只做读取，不修改、不移动、不删除任何 Agent 客户端的数据。所有派生数据写在本项目目录的 <code>data/index.db</code>。</div>
+          <h3>三个识别级别</h3>
+          <p><span class="tag full">完整解析</span> 已读出逐条对话，可查看全文与全文搜索。<br>
+             <span class="tag meta">仅清单</span> 已识别会话标题 / 时间 / 路径，但对话正文存在未解析的容器里。<br>
+             <span class="tag agg">仅体量</span> 只识别到数据目录，报告文件数与占用体积。</p>
+          <h3>桌面窗口模式</h3>
+          <p>双击 exe 即打开独立软件窗口：<b>不启动浏览器、不显示网址、不监听任何端口</b>。界面与 Python 内核通过进程内桥接直连，数据不出本机；关闭窗口即退出。窗口可自由缩放，左侧导航切换六大功能页。</p>
+          <p>导出的文件默认保存在软件目录的 <code>exports/</code>（会先弹出系统「另存为」对话框），清理备份在 <code>backup/quarantine/</code>。 <button class="btn sm" data-act="openfolder">打开输出目录</button></p>
+          <p>高级用途：源码目录下的 <code>python app.py</code> 仍可启动服务模式用于调试，但日常使用完全不需要它。</p>
+          <div class="warnbox"><b>⚠️ 隐私提醒：</b>索引库 <code>data/index.db</code> 以及 <code>exports/</code>、<code>backup/</code> 都含有对话文本副本，请勿随意外传。若曾手动启用服务模式的局域网访问，同网段设备可读取被索引的对话内容。</div>
+          <h3>新增一个客户端</h3>
+          <p>在 <code>core/adapters.py</code> 的 <code>SOURCES</code> 注册表里加一条配置：指定 <code>roots</code>（数据目录）、<code>parser</code>（jsonl / workbuddy / codex / vscdb / sqlite_meta / jsonmeta / aggregate）与 <code>flavor</code>（消息格式）。若是一种全新格式，在 <code>extract_line()</code> 里加一个分支即可，其余模块无需改动。</p>
+          <h3>导出</h3>
+          <p>会话列表页可把<b>当前筛选结果</b>导出为 Markdown 清单（不含消息正文，上限 1000 个会话）；点开某个会话后可单独导出该会话的 Markdown（含全部消息）或 JSON。批量导出不含正文，避免一次生成超大文件。桌面模式下会弹出系统「另存为」对话框，取消则自动保存到 <code>exports/</code>。</p>
+          <h3>清理功能</h3>
+          <p>清理页把本机会话 / 记忆 / 缓存 / 会话数据库分成四类做只读分析，标注体积、风险与保护原因。软件<b>不会自动改动任何文件</b>；要执行清理只需：逐项勾选 → 生成计划并核对完整路径 → 输入「确认清理」 → 完整备份并校验 → 每批最多 10 项移入 Windows 回收站（失败立即停止）→ 可按批次还原。<b>没有额外解锁步骤，确认词是唯一关卡。</b></p>
+          <div class="warnbox danger"><b>⚠️ 此操作非常危险，可能导致不可逆的数据丢失！</b><br><span style="font-size:12px;color:var(--muted)">会话与记忆一旦被客户端覆盖或回收站被清空就无法找回。工具不会自动清理任何文件，也不会替你决定删什么；身份文件、登录状态、本工具目录与系统个人目录一律受保护。建议先关闭对应客户端，并保留 <code>backup/quarantine/</code> 备份。</span></div>
+          <h3>已知边界</h3>
+          <p>体量统计对每个来源最多抽样 <code>20000</code> 个文件，并跳过缓存 / node_modules / 运行时目录，超大目录可能低估；云端会话（豆包、即梦、Coze 等）本地通常只有缓存，无法还原对话。中文全文检索由 FTS5 与子串匹配双路合并，未做语义分词。</p>
+          <h3>诊断脚本</h3>
+          <p><code>tools/</code> 下的只读诊断脚本用于探查新客户端的数据落地位置与文件结构，输出路径、键名与类型，不输出任何对话正文。</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- 清理计划确认 -->
+<div class="modal" id="planModal">
+  <div class="mbox">
+    <div class="mh"><h3>⚠️ 清理计划确认 —— 请逐项核对完整路径</h3></div>
+    <div class="mb" id="planBody"></div>
+    <div class="mf">
+      <input class="inp" id="planConfirm" placeholder="输入「确认清理」以继续" style="flex:1;min-width:200px">
+      <button class="btn primary" id="btnCleanupExecute" disabled>执行清理</button>
+      <button class="btn" id="btnPlanClose">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 详情抽屉 -->
+<div class="drawer" id="drawer">
+  <div class="dh"><h3 id="dTitle">—</h3><button class="close" id="dClose">×</button></div>
+  <div class="dmeta" id="dMeta"></div>
+  <div class="dbody" id="dBody"></div>
+  <div style="padding:12px 20px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn sm" data-act="loadmore">加载更多消息</button>
+    <button class="btn sm" data-act="dl" id="dExportMd">导出 Markdown</button>
+    <button class="btn sm" data-act="dl" id="dExportJson">导出 JSON</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+// 收集前端异常，供桌面自检回报（也便于定位桥接问题）
+window.__jsErrors=[];
+window.addEventListener('error',e=>{window.__jsErrors.push(String(e.message||e.error||'error').slice(0,160));});
+window.addEventListener('unhandledrejection',e=>{
+  window.__jsErrors.push('Promise: '+String((e.reason&&e.reason.message)||e.reason||'?').slice(0,160));});
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const S = {view:'overview', src:[], ov:{}, page:1, detail:null, offset:0, msgs:[], total:0, scanTimer:null, searchTimer:null};
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nf = n => (n||0).toLocaleString('zh-CN');
+const fmtB = b => { b=b||0; if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(1)+' KB';
+  if(b<1073741824) return (b/1048576).toFixed(1)+' MB'; return (b/1073741824).toFixed(2)+' GB'; };
+const fmtT = ms => { if(!ms) return '—'; const d=new Date(ms);
+  return isNaN(d)?'—':`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+const fmtD = ms => fmtT(ms).slice(0,10);
+const srcName = id => (S.src.find(x=>x.id===id)||{}).name || id;
+const srcColor = id => (S.src.find(x=>x.id===id)||{}).color || '#5b8cff';
+
+// pywebview 会先创建 window.pywebview.api 对象、再逐个注入方法；
+// 只看对象存在就调用会得到 "call is not a function"。必须等方法真正可用。
+let _bridgePromise=null;
+function bridgeAlive(){
+  return !!(window.__DESKTOP__ && window.pywebview && window.pywebview.api
+    && typeof window.pywebview.api.call==='function');
+}
+function bridgeReady(){
+  if(!window.__DESKTOP__) return Promise.resolve(false);
+  if(bridgeAlive()) return Promise.resolve(true);
+  if(_bridgePromise) return _bridgePromise;
+  _bridgePromise=new Promise(resolve=>{
+    let timer=null, settled=false;
+    const finish=v=>{ if(settled)return; settled=true; if(timer)clearInterval(timer); resolve(v); };
+    window.addEventListener('pywebviewready',()=>finish(bridgeAlive()),{once:true});
+    timer=setInterval(()=>{ if(bridgeAlive()) finish(true); },80);
+    setTimeout(()=>finish(bridgeAlive()),10000);
+  });
+  return _bridgePromise;
+}
+async function api(path, opts){
+  if(window.__DESKTOP__){
+    if(!await bridgeReady()){ toast('桌面桥接未就绪，请重启软件'); return {error:'bridge not ready'}; }
+    const method=(opts&&opts.method)||'GET';
+    let body=null;
+    if(opts&&opts.body){ try{ body=JSON.parse(opts.body); }catch(e){ body=null; } }
+    try{ return await window.pywebview.api.call(method, path, body); }
+    catch(e){ toast('请求失败: '+e); return {error:String(e)}; }
+  }
+  const r = await fetch(path, opts);
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+async function download(path){
+  if(window.__DESKTOP__){
+    if(!await bridgeReady()){ toast('桌面桥接未就绪，请重启软件'); return; }
+    try{
+      const r=await window.pywebview.api.call('GET', path, null);
+      if(r&&r.__saved__) toast('已导出到: '+r.__saved__);
+      else if(r&&r.__error__) toast(r.__error__);
+      else toast('导出完成');
+    }catch(e){ toast('导出失败: '+e); }
+    return;
+  }
+  window.location=path;
+}
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2600); }
+function levelTag(l){ const m={full:['完整解析','full'],meta:['仅清单','meta'],aggregate:['仅体量','agg']};
+  const [t,c]=m[l]||['—','agg']; return `<span class="tag ${c}">${t}</span>`; }
+
+/* ---------------- 启动 ---------------- */
+async function boot(){
+  try{
+    const b = await api('/api/bootstrap');
+    S.src = b.sources||[]; S.ov = b.overview||{};
+    fillSourceSelect();
+    renderAll();
+    updateScan(b.scan);
+    if(b.scan && b.scan.running) pollScan();
+  }catch(e){ toast('后端连接失败：'+e.message); }
+}
+function fillSourceSelect(){
+  const sel=$('#fsource'); const cur=sel.value;
+  sel.innerHTML='<option value="">全部来源</option>'+S.src.filter(s=>s.detected)
+    .map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  sel.value=cur;
+}
+function renderAll(){
+  renderOverview(); renderSessions(); renderSources(); renderStorage();
+  $('#foot-stat').textContent = `${S.src.filter(s=>s.detected).length} 个来源 · ${nf(S.ov.sessions)} 个会话`;
+  $('#regCount').textContent = `注册表 ${S.ov.sources||0} 个来源 · 已检测到 ${S.src.filter(s=>s.detected).length} 个`;
+}
+
+/* ---------------- 视图切换 ---------------- */
+function switchView(v){
+  S.view=v; $$('.view').forEach(x=>x.classList.remove('on'));
+  $('#v-'+v).classList.add('on');
+  $$('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  $('#pageTitle').textContent={overview:'总览',sessions:'会话',search:'全文搜索',
+    sources:'来源识别',storage:'占用分析',cleanup:'清理',help:'使用说明'}[v]||v;
+  $('#sidebar').classList.remove('on');
+  window.scrollTo(0,0);
+  if(v==='search') setTimeout(()=>$('#sq').focus(),100);
+  if(v==='cleanup') cleanupInit();
+}
+
+/* ---------------- 总览 ---------------- */
+function renderOverview(){
+  const o=S.ov;
+  $('#k1').textContent=nf(o.sources); $('#k1s').textContent=`注册表共 ${S.src.length} 个客户端`;
+  $('#k2').textContent=nf(o.sessions); $('#k2s').textContent=`消息合计 ${nf(o.messages_total)} 条`;
+  $('#k3').textContent=nf(o.messages_indexed); $('#k3s').textContent=o.has_fts?'FTS5 全文索引可用':'LIKE 模糊检索';
+  $('#k4').textContent=fmtB(o.data_bytes); $('#k4s').textContent=`${nf(o.data_files)} 个文件`;
+  renderTimeline();
+  const top=S.src.filter(s=>s.session_count>0).sort((a,b)=>b.session_count-a.session_count).slice(0,8);
+  const mx=Math.max(1,...top.map(s=>s.session_count));
+  $('#srcBars').innerHTML = top.length? top.map(s=>`<div class="hbar">
+    <div class="nm" title="${esc(s.name)}">${esc(s.name)}</div>
+    <div class="tr"><div class="fl" style="width:${(s.session_count/mx*100).toFixed(1)}%;background:${esc(s.color||'#5b8cff')}"></div></div>
+    <div class="vl">${nf(s.session_count)}</div></div>`).join('') : '<div class="empty">暂无会话索引，请先扫描</div>';
+  api('/api/sessions?size=8').then(r=>{
+    $('#recent').innerHTML = r.items.length? r.items.map(rowHTML).join('') : emptyHTML('还没有索引到会话，点击右上角「重新扫描」');
+  }).catch(()=>{});
+}
+async function renderTimeline(){
+  try{
+    const r=await api('/api/timeline?days=30');
+    const map={}; (r.items||[]).forEach(x=>{ map[x.d]=(map[x.d]||0)+x.n; });
+    const days=[]; const now=new Date(); now.setHours(0,0,0,0);
+    for(let i=29;i>=0;i--){ const d=new Date(now.getTime()-i*86400000);
+      const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      days.push([k,map[k]||0]); }
+    const mx=Math.max(1,...days.map(x=>x[1]));
+    $('#timeline').innerHTML=days.map(([k,n])=>`<div class="b" style="height:${Math.max(2,n/mx*100)}%" title="${k}: ${n} 个会话"><span>${n}</span></div>`).join('');
+    $('#tl-start').textContent=days[0][0];
+  }catch(e){}
+}
+function emptyHTML(msg,big='◌'){return `<div class="empty"><div class="big">${big}</div>${esc(msg)}</div>`;}
+function rowHTML(s){
+  return `<div class="row" data-act="open" data-id="${esc(s.id)}">
+    <div class="t"><span class="tag" style="color:${esc(srcColor(s.source_id))};border-color:${esc(srcColor(s.source_id))}44">${esc(srcName(s.source_id))}</span>
+      <span class="title">${esc(s.title||'(无标题)')}</span>${levelTag(s.level)}</div>
+    <div class="pv">${esc(s.preview||'（无预览）')}</div>
+    <div class="meta"><span>🕒 ${fmtT(s.updated_at)}</span>
+      ${s.project?`<span>📁 ${esc(s.project)}</span>`:''}
+      <span>💬 ${nf(s.message_count)}</span><span>💾 ${fmtB(s.size_bytes)}</span></div>
+  </div>`;
+}
+
+/* ---------------- 会话 ---------------- */
+function sessParams(){
+  const q=new URLSearchParams({page:S.page,size:30,sort:$('#fsort').value});
+  const a=$('#fq').value.trim(); if(a) q.set('q',a);
+  const b=$('#fsource').value; if(b) q.set('source',b);
+  const c=+$('#fdays').value; if(c) q.set('days',c);
+  return q;
+}
+async function renderSessions(){
+  try{
+    const r=await api('/api/sessions?'+sessParams());
+    $('#sessionList').innerHTML = r.items.length? r.items.map(rowHTML).join('') : emptyHTML('没有匹配的会话，试试调整筛选条件');
+    const pages=Math.max(1,Math.ceil(r.total/r.size));
+    $('#pager').innerHTML=`<button class="btn sm" data-act="page" data-p="${S.page-1}" ${S.page<=1?'disabled':''}>上一页</button>
+      <span>第 ${S.page} / ${pages} 页 · 共 ${nf(r.total)} 个会话</span>
+      <button class="btn sm" data-act="page" data-p="${S.page+1}" ${S.page>=pages?'disabled':''}>下一页</button>`;
+  }catch(e){ $('#sessionList').innerHTML=emptyHTML('加载失败：'+e.message); }
+}
+
+/* ---------------- 详情 ---------------- */
+async function openDetail(id){
+  S.detail=id; S.offset=0; S.msgs=[];
+  $('#drawer').classList.add('on');
+  $('#dBody').innerHTML='<div class="empty">加载中…</div>';
+  await loadDetail();
+}
+async function loadDetail(){
+  if(!S.detail) return;
+  try{
+    const r=await api(`/api/session?id=${encodeURIComponent(S.detail)}&offset=${S.offset}&limit=120`);
+    if(r.error){ $('#dBody').innerHTML=emptyHTML(r.error); return; }
+    const s=r.session; S.total=r.total;
+    $('#dTitle').textContent=s.title||'(无标题)';
+    $('#dMeta').innerHTML=`<span>来源 <b>${esc(srcName(s.source_id))}</b></span><span>更新 ${fmtT(s.updated_at)}</span>
+      <span>消息 ${nf(s.message_count)}</span><span>体积 ${fmtB(s.size_bytes)}</span>
+      ${s.project?`<span>项目 ${esc(s.project)}</span>`:''}
+      <span title="${esc(s.file_path||'')}">📄 ${esc((s.file_path||'').split(/[\\/]/).pop()||'—')}</span>`;
+    $('#dExportMd').dataset.path=`/api/export?scope=session&format=md&id=${encodeURIComponent(S.detail)}`;
+    $('#dExportJson').dataset.path=`/api/export?scope=session&format=json&id=${encodeURIComponent(S.detail)}`;
+    if(S.offset===0) S.msgs=[];
+    S.msgs=S.msgs.concat(r.messages||[]);
+    $('#dBody').innerHTML = S.msgs.length? S.msgs.map(m=>`<div class="msg ${esc(m.role)}">
+      <div class="mh"><span>${m.role==='user'?'👤 用户':m.role==='assistant'?'🤖 助手':esc(m.role)}</span><span>${fmtT(m.ts)}</span></div>
+      <div class="mb">${esc(m.text)}</div></div>`).join('') : emptyHTML('该来源仅识别到会话清单，对话正文未解析','📄');
+    if(S.offset===0) $('#dBody').scrollTop=0;
+  }catch(e){ $('#dBody').innerHTML=emptyHTML('加载失败：'+e.message); }
+}
+
+/* ---------------- 搜索 ---------------- */
+async function doSearch(){
+  const q=$('#sq').value.trim();
+  if(!q){ $('#searchResults').innerHTML=emptyHTML('输入关键词开始检索对话正文','⌕'); return; }
+  try{
+    const r=await api('/api/search?q='+encodeURIComponent(q)+'&limit=120');
+    $('#searchResults').innerHTML = r.items.length? r.items.map(x=>`<div class="row" data-act="open" data-id="${esc(x.session_id)}">
+      <div class="t"><span class="tag">${esc(srcName(x.source_id))}</span><span class="title">${esc(x.title||'(无标题)')}</span>
+        <span class="tag">${x.role==='user'?'用户':'助手'}</span></div>
+      <div class="pv">${x.snippet||''}</div>
+      <div class="meta"><span>🕒 ${fmtT(x.updated_at)}</span></div></div>`).join('')
+      : emptyHTML('没有命中，试试更短的关键词');
+  }catch(e){ $('#searchResults').innerHTML=emptyHTML('搜索失败：'+e.message); }
+}
+
+/* ---------------- 来源 ---------------- */
+function renderSources(){
+  const arr=[...S.src].sort((a,b)=>(b.detected-a.detected)||(b.session_count-a.session_count)||(b.total_bytes-a.total_bytes));
+  $('#srcGrid').innerHTML=arr.map(s=>`<div class="src">
+    <div class="h"><div class="av" style="background:${esc(s.color||'#5b8cff')}">${esc((s.name||'?').slice(0,1))}</div>
+      <div class="nm">${esc(s.name)}</div>${s.detected?levelTag(s.level):'<span class="tag agg">未检测到</span>'}</div>
+    <div class="tag">${esc(s.vendor||'—')}</div> <span class="tag">${esc(s.kind||'—')}</span>
+    <div class="stats"><div><b>${nf(s.session_count)}</b>会话</div><div><b>${nf(s.file_count)}</b>文件</div>
+      <div><b>${fmtB(s.total_bytes)}</b>体量</div></div>
+    ${s.note?`<div class="note">${esc(s.note)}</div>`:''}
+    ${s.error?`<div class="note" style="color:var(--red)">⚠ ${esc(s.error)}</div>`:''}
+    <div class="path">${esc(s.root||'—')}</div>
+    <div class="foot">${s.detected?`<button class="btn sm" data-act="scanone" data-id="${esc(s.id)}">重扫此来源</button>
+      <button class="btn sm" data-act="dl" data-path="/api/export?scope=source&amp;format=md&amp;id=${encodeURIComponent(s.id)}">导出清单</button>`:''}</div>
+  </div>`).join('');
+}
+
+/* ---------------- 占用 ---------------- */
+async function renderStorage(){
+  try{
+    const r=await api('/api/storage');
+    const bars=(arr,key,lab)=>{ const t=arr.slice(0,10), mx=Math.max(1,...t.map(x=>x[key]||0));
+      return t.length?t.map(x=>`<div class="hbar"><div class="nm" title="${esc(x[lab]||'')}">${esc(srcName(x.source_id)||x[lab]||'—')}</div>
+        <div class="tr"><div class="fl" style="width:${((x[key]||0)/mx*100).toFixed(1)}%"></div></div>
+        <div class="vl">${fmtB(x.b||x.n)}</div></div>`).join(''):emptyHTML('暂无数据'); };
+    $('#stSource').innerHTML=bars(r.by_source||[],'b','source_id');
+    const pr=r.by_project||[], pm=Math.max(1,...pr.map(x=>x.b||0));
+    $('#stProject').innerHTML=pr.length?pr.slice(0,10).map(x=>`<div class="hbar">
+      <div class="nm" title="${esc(x.project)}">${esc(x.project)}</div>
+      <div class="tr"><div class="fl" style="width:${((x.b||0)/pm*100).toFixed(1)}%"></div></div>
+      <div class="vl">${fmtB(x.b)}</div></div>`).join(''):emptyHTML('暂无数据');
+    $('#stOldest').innerHTML='<tr><th>会话</th><th>来源</th><th class="num">更新</th><th class="num">体积</th></tr>'+
+      (r.oldest||[]).map(x=>`<tr><td><a href="#" data-act="open" data-id="${esc(x.id)}">${esc((x.title||'').slice(0,26))}</a></td>
+        <td>${esc(srcName(x.source_id))}</td><td class="num">${fmtD(x.updated_at)}</td><td class="num">${fmtB(x.size_bytes)}</td></tr>`).join('');
+    $('#stMonth').innerHTML='<tr><th>月份</th><th class="num">会话</th><th class="num">体积</th></tr>'+
+      (r.by_month||[]).slice(0,12).map(x=>`<tr><td>${esc(x.m)}</td><td class="num">${nf(x.n)}</td><td class="num">${fmtB(x.b)}</td></tr>`).join('');
+    $('#stAssets').innerHTML='<tr><th>目录</th><th>来源</th><th class="num">文件</th><th class="num">体积</th><th class="num">最近活动</th></tr>'+
+      (r.assets||[]).slice(0,20).map(x=>`<tr><td title="${esc(x.note)}">${esc(x.path)}</td>
+        <td>${esc(x.source_name)}</td><td class="num">${nf(x.files)}</td><td class="num">${fmtB(x.bytes)}</td>
+        <td class="num">${fmtD(x.latest_mtime)}</td></tr>`).join('');
+  }catch(e){}
+}
+
+/* ---------------- 扫描 ---------------- */
+async function startScan(ids){
+  try{
+    const r=await api('/api/scan',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sources:ids||null})});
+    if(r&&r.error){ toast('识别启动失败：'+r.error); return; }
+    // 一次「识别」= 会话索引 + 清理候选；两者可能有一个已在跑，仍继续轮询统一状态
+    toast((r.started||r.cleanup_started)?'识别已启动':'识别正在进行中');
+    updateScan(r.status||{running:true}); pollScan();
+  }catch(e){ toast('识别启动失败：'+e.message); }
+}
+function setScanBusy(on, st){
+  const b=$('#scanBadge'), spin=$('#scanSpin'), txt=$('#scanBtnText'), btn=$('#btnScan');
+  if(!b||!spin||!txt||!btn) return;
+  if(on){
+    b.className='badge warn';
+    let label;
+    if(st&&st.cleanup_running&&!st.sessions_running) label='清理数据分析中…';
+    else if(st&&st.cleanup_running) label=`会话 ${st.done}/${st.total} + 清理数据`;
+    else label=`会话 ${st?st.done:0}/${st?st.total:0}${st&&st.current?' · '+esc(st.current):''}`;
+    b.innerHTML=`<span class="spin"></span>识别中 ${label}`;
+    spin.style.display='inline-block'; txt.textContent='识别中…';
+    btn.disabled=true; btn.classList.add('scanning');
+  }else{
+    b.className='badge ok'; b.textContent=(st&&st.phase==='error')?'扫描异常':
+      (S.ov.sessions?`已索引 ${nf(S.ov.sessions)} 个会话`:'等待扫描');
+    spin.style.display='none'; txt.textContent='重新扫描';
+    btn.disabled=false; btn.classList.remove('scanning');
+  }
+}
+function updateScan(st){
+  if(!st) return;
+  setScanBusy(!!st.running, st);
+}
+function pollScan(){
+  clearInterval(S.scanTimer);
+  S.scanTimer=setInterval(async()=>{
+    try{
+      const st=await api('/api/scan/status'); updateScan(st);
+      if(!st.running){
+        clearInterval(S.scanTimer);
+        const b=await api('/api/bootstrap');
+        S.src=b.sources||[]; S.ov=b.overview||{};
+        fillSourceSelect(); renderAll();
+        C.loaded=true;                       // 清理候选已随统一识别完成
+        if(S.view==='cleanup'){ await cleanupSummary(); await cleanupItems(); }
+        toast(st.phase==='error'?st.message:
+          `识别完成${st.cleanup_items?' · 清理候选 '+nf(st.cleanup_items)+' 项':''}`);
+      }
+    }catch(e){ clearInterval(S.scanTimer); }
+  },1100);
+}
+
+/* ---------------- 清理（默认只读） ---------------- */
+const C={page:1,size:50,rows:[],total:0,selected:new Map(),summary:null,plan:null,loaded:false,busy:false};
+const catLabel={session:'会话记录',memory:'记忆文件',cache:'缓存/日志',database:'会话数据库'};
+const catColor={session:'#f0b458',memory:'#ef6b73',cache:'#2ecc8f',database:'#a78bfa'};
+
+function cleanupParams(){
+  const p=new URLSearchParams({page:C.page,size:C.size});
+  const cat=$('#cCat').value; if(cat)p.set('category',cat);
+  const risk=$('#cRisk').value; if(risk)p.set('risk',risk);
+  const q=$('#cQ').value.trim(); if(q)p.set('q',q);
+  if($('#cSuggested').checked)p.set('suggested','1');
+  return p;
+}
+async function cleanupSummary(){
+  try{
+    const s=await api('/api/cleanup/summary'); C.summary=s;
+    const bc=s.by_category||{};
+    $('#cleanupKpis').innerHTML=['session','memory','cache','database'].map(k=>{
+      const v=bc[k]||{label:k,count:0,bytes:0,color:'#5b8cff'};
+      return `<div class="kpi"><div class="lab">${esc(v.label)}</div>
+        <div class="val" style="color:${esc(v.color)}">${fmtB(v.bytes)}</div>
+        <div class="sub">${nf(v.count)} 个条目</div></div>`;}).join('');
+    $('#cleanupMode').innerHTML =
+      `<span class="tag r-low">只读识别 · 不会自动改动文件</span> `+
+      `<span style="font-size:11.5px;color:var(--muted)">识别已与顶栏「重新扫描」合并为一套：启动或点重新扫描时，会话索引与清理候选一起生成并自动填入本页；随后逐项勾选 → 核对完整路径 → 输入「确认清理」即可执行，执行前完整备份且可按批次还原</span>`;
+    if(s.running_agents&&s.running_agents.length)
+      $('#cleanupMode').innerHTML+=`<div style="font-size:11.5px;color:var(--amber);margin-top:8px">⚠ 检测到正在运行的客户端：${esc(s.running_agents.join(' / '))}，建议先关闭再清理</div>`;
+    if(s.last_scan_at) C.loaded=true;
+  }catch(e){ toast('清理模块未就绪：'+e.message); }
+}
+async function cleanupScan(){
+  if(C.busy)return; C.busy=true;
+  const spin=$('#cleanupSpin'), txt=$('#cleanupBtnText'), btn=$('#btnCleanupScan');
+  const setBusy=on=>{
+    spin.style.display=on?'inline-block':'none';
+    txt.textContent=on?'正在分析…':'重新分析（只读）';
+    btn.disabled=on; btn.classList.toggle('scanning',on);
+  };
+  setBusy(true);
+  $('#cleanupTable').innerHTML='<tr><td colspan="8"><div class="scanning-row">'
+    +'<span class="spin lg"></span><span id="cleanupWait">正在只读分析本机数据，请稍候…</span></div></td></tr>';
+  $('#cleanupPager').innerHTML='';
+  const restore=()=>{ C.busy=false; setBusy(false); };
+  try{
+    const r=await api('/api/cleanup/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    if(r&&r.error){ toast('清理分析启动失败：'+r.error); restore(); cleanupItems(); return; }
+    // started=false = 统一识别已在后台跑：继续轮询等待，不重复启动也不报错
+    let ticks=0;
+    const poll=async()=>{
+      let s;
+      try{ s=await api('/api/cleanup/scan/status'); }
+      catch(e){ toast('分析状态获取失败：'+e.message); restore(); cleanupItems(); return; }
+      if(s&&s.running&&ticks++<180){
+        const w=$('#cleanupWait');
+        if(w) w.textContent=`正在只读分析本机数据… 已用时 ${Math.round(ticks*0.7)} 秒`;
+        setTimeout(poll,700); return;
+      }
+      C.loaded=true; C.selected.clear(); C.page=1;
+      await cleanupSummary(); await cleanupItems();
+      toast(`分析完成：${nf(s.total_items||0)} 个条目，合计 ${fmtB(s.total_bytes||0)}`+(s.error?'（'+s.error+'）':''));
+      restore();
+    };
+    setTimeout(poll,500);
+  }catch(e){ toast('分析失败：'+e.message); restore(); cleanupItems(); }
+}
+async function cleanupItems(){
+  if(!C.loaded){ $('#cleanupTable').innerHTML='<tr><td colspan="8" class="empty">尚未生成清理候选 —— 等待顶部统一识别完成，或点「重新分析（只读）」；此操作不会改动任何文件</td></tr>';
+    $('#cleanupPager').innerHTML=''; return; }
+  try{
+    const r=await api('/api/cleanup/items?'+cleanupParams());
+    C.rows=r.items; C.total=r.total;
+    $('#cleanupTable').innerHTML='<tr><th></th><th>类别</th><th>来源</th><th>完整路径</th>'+
+      '<th class="num">体积</th><th class="num">更新</th><th>风险</th><th>说明</th></tr>'+
+      (r.items.length? r.items.map(it=>{
+        const can=!it.protected&&!it.oversized;
+        return `<tr>
+          <td><input type="checkbox" class="chk citem" data-id="${esc(it.id)}" ${C.selected.has(it.id)?'checked':''} ${can?'':'disabled'}></td>
+          <td><span class="tag" style="color:${catColor[it.category]};border-color:${catColor[it.category]}55">${catLabel[it.category]}</span></td>
+          <td>${esc(it.source_name)}</td>
+          <td><div class="pathcell" title="${esc(it.path)}">${esc(it.path)}</div>
+            <div class="cellsub">${it.is_dir?`目录 · ${nf(it.files)} 个文件`:'文件'}${it.truncated?' · 统计已截断':''}${it.oversized?' · 超过上限':''}</div></td>
+          <td class="num">${fmtB(it.size)}</td><td class="num">${fmtD(it.mtime)}</td>
+          <td><span class="tag r-${esc(it.risk)}">${esc(it.risk_label)}</span>${it.protected?'<span class="tag protected">受保护</span>':''}</td>
+          <td style="font-size:11px;color:var(--muted);max-width:250px">${esc(it.protected?it.protect_reason:it.reason)}</td></tr>`;
+      }).join('') : '<tr><td colspan="8" class="empty">没有匹配条目</td></tr>');
+    const pages=Math.max(1,Math.ceil(r.total/C.size));
+    $('#cleanupPager').innerHTML=`<button class="btn sm" data-act="cpage" data-p="${C.page-1}" ${C.page<=1?'disabled':''}>上一页</button>
+      <span>第 ${C.page} / ${pages} 页 · 共 ${nf(r.total)} 条</span>
+      <button class="btn sm" data-act="cpage" data-p="${C.page+1}" ${C.page>=pages?'disabled':''}>下一页</button>`;
+    updateCleanupSel();
+  }catch(e){ $('#cleanupTable').innerHTML=`<tr><td colspan="8" class="empty">加载失败：${esc(e.message)}</td></tr>`; }
+}
+function updateCleanupSel(){
+  let b=0; C.selected.forEach(v=>b+=v.size||0);
+  $('#cleanupSel').innerHTML=`已选 <b>${C.selected.size}</b> 项 · 预计释放 <b>${fmtB(b)}</b>`;
+  $('#btnCleanupPlan').disabled=C.selected.size===0;
+}
+async function makePlan(){
+  if(!C.selected.size)return;
+  try{
+    const r=await api('/api/cleanup/plan',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ids:[...C.selected.keys()]})});
+    C.plan=r.plan; const p=r.plan;
+    $('#planBody').innerHTML=`
+      <div class="warnbox danger" style="margin:0 0 12px"><b>⚠️ 此操作非常危险，可能导致不可逆的数据丢失！</b>
+        <p style="margin:6px 0 0;font-size:11.5px">以下 <b>${p.items.length}</b> 项将被移入 Windows 回收站，预计释放 <b>${fmtB(p.total_bytes)}</b>。请逐项核对下方完整路径，在底部输入「确认清理」即可执行（这是唯一确认步骤）。执行前会完整备份到 <code>backup/quarantine/&lt;批次号&gt;/</code> 并校验，按每批 10 项执行，任一失败立即停止。</p></div>
+      <div class="plist">${p.items.map(i=>`<div class="pi">${esc(i.path)} <span style="color:var(--dim)">· ${fmtB(i.size)} · ${catLabel[i.category]}</span></div>`).join('')}</div>
+      ${p.rejected.length?`<div style="color:var(--amber);font-size:11.5px;margin-top:8px">已拒绝 ${p.rejected.length} 项：${p.rejected.slice(0,4).map(x=>esc(x.why)).join('、')}</div>`:''}`;
+    $('#planConfirm').value=''; $('#btnCleanupExecute').disabled=true;
+    $('#planModal').classList.add('on');
+  }catch(e){ toast('生成计划失败：'+e.message); }
+}
+async function executeCleanup(){
+  if(!C.plan)return;
+  const btn=$('#btnCleanupExecute'); btn.disabled=true; btn.textContent='执行中…';
+  try{
+    const r=await api('/api/cleanup/execute',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({plan_id:C.plan.id,confirm:$('#planConfirm').value})});
+    if(!r.ok&&r.error){ toast(r.error); $('#planBody').insertAdjacentHTML('beforeend',`<div class="warnbox danger">${esc(r.error)}</div>`); }
+    else{
+      $('#planBody').innerHTML=`<div class="okbox">✅ 批次 <b>${esc(r.batch_id)}</b>：成功 ${r.done} 项${r.failed.length?`，失败 ${r.failed.length} 项`:''}。<br>备份：<code>${esc(r.backup_root)}</code><br>${esc(r.note||'')}</div>
+        <div style="font-size:11.5px">如需恢复，请在下方「历史批次与还原」点击该批次的还原按钮。</div>`;
+      C.selected.clear(); C.plan=null;
+      await cleanupSummary(); await cleanupItems(); await cleanupHistory();
+    }
+  }catch(e){ toast('执行失败：'+e.message); }
+  finally{ btn.textContent='执行清理';
+    btn.disabled = !C.plan || $('#planConfirm').value.trim()!==((C.summary&&C.summary.confirm_word)||'确认清理'); }
+}
+async function cleanupHistory(){
+  try{
+    const r=await api('/api/cleanup/history');
+    $('#cleanupHistory').innerHTML='<tr><th>批次</th><th>时间</th><th class="num">成功</th><th class="num">体积</th><th>状态</th><th></th></tr>'+
+      (r.items.length? r.items.map(x=>`<tr><td>${esc(x.batch_id)}</td><td>${fmtT(x.at)}</td>
+        <td class="num">${x.done}/${x.requested}</td><td class="num">${fmtB(x.total_bytes)}</td>
+        <td>${x.restored?'已还原':(x.note?'部分失败':'已完成')}</td>
+        <td><button class="btn sm" data-act="restore" data-id="${esc(x.batch_id)}" ${x.restored?'disabled':''}>还原此批次</button></td></tr>`).join('')
+        : '<tr><td colspan="6" class="empty">暂无清理批次 —— 这正是安全状态</td></tr>');
+  }catch(e){}
+}
+async function restoreBatch(id){
+  if(!confirm('确认从备份还原该批次？原路径若已存在文件会跳过，不会覆盖。'))return;
+  try{
+    const r=await api('/api/cleanup/restore',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({batch_id:id})});
+    if(!r.ok){ toast(r.error||'还原失败'); return; }
+    toast(`已还原 ${r.restored} 项，跳过 ${r.skipped.length} 项`);
+    await cleanupHistory();
+  }catch(e){ toast('还原失败：'+e.message); }
+}
+function cleanupInit(){
+  // 与顶栏「重新扫描」共用一套统一识别：进入本页时若还没结果，就跟随正在跑的识别轮询等待
+  cleanupSummary().then(()=>{
+    if(C.loaded){ cleanupItems().then(cleanupHistory); }
+    else { cleanupHistory(); if(!C.busy) cleanupScan(); }
+  });
+}
+
+/* ---------------- 事件 ---------------- */
+$('#nav').addEventListener('click',e=>{ const b=e.target.closest('button[data-v]'); if(b) switchView(b.dataset.v); });
+$('#burger').addEventListener('click',()=>$('#sidebar').classList.toggle('on'));
+$('#btnScan').addEventListener('click',()=>startScan(null));
+$('#btnScanAll').addEventListener('click',()=>startScan(null));
+$('#dClose').addEventListener('click',()=>$('#drawer').classList.remove('on'));
+$('#btnSearch').addEventListener('click',doSearch);
+$('#sq').addEventListener('keydown',e=>{ if(e.key==='Enter') doSearch(); });
+$('#sq').addEventListener('input',()=>{ clearTimeout(S.searchTimer); S.searchTimer=setTimeout(doSearch,350); });
+['#fq','#fsource','#fdays','#fsort'].forEach(sel=>{
+  const el=$(sel); el.addEventListener(el.tagName==='INPUT'?'input':'change',()=>{ S.page=1;
+    clearTimeout(el._t); el._t=setTimeout(renderSessions,el.tagName==='INPUT'?300:0); });
+});
+$('#btnExport').addEventListener('click',()=>{
+  const p=new URLSearchParams({scope:'filtered',format:'md',
+    q:$('#fq').value.trim(),source:$('#fsource').value,
+    days:$('#fdays').value,sort:$('#fsort').value});
+  download('/api/export?'+p);
+});
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]'); if(!t) return;
+  const a=t.dataset.act;
+  if(a==='open'){ e.preventDefault(); openDetail(t.dataset.id); }
+  if(a==='page'){ S.page=Math.max(1,+t.dataset.p); renderSessions(); window.scrollTo(0,0); }
+  if(a==='scanone'){ startScan([t.dataset.id]); }
+  if(a==='loadmore'){ if(S.offset+120<S.total){ S.offset+=120; loadDetail(); } else toast('已加载全部消息'); }
+  if(a==='cpage'){ C.page=Math.max(1,+t.dataset.p); cleanupItems(); window.scrollTo(0,0); }
+  if(a==='restore'){ restoreBatch(t.dataset.id); }
+  if(a==='dl'){ e.preventDefault(); download(t.dataset.path||t.getAttribute('href')||''); }
+  if(a==='openfolder'){
+    bridgeReady().then(ok=>{ if(ok) window.pywebview.api.open_folder().then(r=>{
+      if(r&&r.path) toast('已打开: '+r.path); }); });
+  }
+  if(a==='quit'){
+    bridgeReady().then(ok=>{ if(ok) window.pywebview.api.quit();
+      else toast('服务模式请在控制台按 Ctrl+C 停止'); });
+  }
+});
+$('#btnCleanupScan').addEventListener('click',cleanupScan);
+['#cCat','#cRisk','#cSuggested'].forEach(sel=>$(sel).addEventListener('change',()=>{C.page=1;cleanupItems();}));
+$('#cQ').addEventListener('input',()=>{clearTimeout($('#cQ')._t);$('#cQ')._t=setTimeout(()=>{C.page=1;cleanupItems();},300);});
+$('#cleanupTable').addEventListener('change',e=>{
+  const cb=e.target.closest('.citem'); if(!cb)return;
+  const it=C.rows.find(x=>x.id===cb.dataset.id);
+  if(cb.checked&&it) C.selected.set(it.id,{size:it.size,path:it.path});
+  else C.selected.delete(cb.dataset.id);
+  updateCleanupSel();
+});
+$('#cAll').addEventListener('change',e=>{
+  C.rows.forEach(it=>{ if(it.protected||it.oversized)return;
+    if(e.target.checked) C.selected.set(it.id,{size:it.size,path:it.path});
+    else C.selected.delete(it.id); });
+  cleanupItems();
+});
+$('#btnCleanupPlan').addEventListener('click',makePlan);
+$('#btnPlanClose').addEventListener('click',()=>$('#planModal').classList.remove('on'));
+$('#planModal').addEventListener('click',e=>{ if(e.target.id==='planModal') $('#planModal').classList.remove('on'); });
+$('#planConfirm').addEventListener('input',e=>{
+  $('#btnCleanupExecute').disabled=e.target.value.trim()!==((C.summary&&C.summary.confirm_word)||'确认清理');
+});
+$('#btnCleanupExecute').addEventListener('click',executeCleanup);
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ $('#drawer').classList.remove('on');
+    $('#planModal').classList.remove('on'); }
+});
+function startApp(){ if(window.__appStarted)return; window.__appStarted=true; boot(); }
+// 等 call 真正可用后再启动，避免 boot() 里的接口请求撞上桥接注入窗口期
+if(window.__DESKTOP__) bridgeReady().then(startApp);
+else startApp();
+</script>
+</body>
+</html>
