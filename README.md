@@ -17,6 +17,16 @@
 
 支持的客户端包括 WorkBuddy、Claude Code、Codex、Qoder、TRAE、CodeBuddy、Devin、Cursor、Windsurf、CatPaw、Hermes 等，完整清单见 `core/adapters.py`。
 
+> ## ⚠️ 平台与测试范围（请先阅读）
+>
+> **本项目目前只在 Windows 上测试过。**
+>
+> - **macOS / Linux 没有测试过**：未在这些平台上做过任何安装、构建或运行验证。
+> - 这些平台上的**兼容性与运行情况未经验证**，不保证可用。
+> - 当前实现依赖 Windows 专有组件（WebView2 Runtime、Win32 回收站 API、pywebview 的 WinForms 后端等），**不是跨平台实现**。
+>
+> 请勿把本说明理解为对 macOS / Linux 的支持承诺，也不要假定它们已通过验证。
+
 ## 快速开始
 
 ### 直接使用（推荐）
@@ -83,7 +93,7 @@ web/index.html  <->  core/bridge.py  <->  core/server.py (API.dispatch)
 
 ## 已知限制
 
-- 仅支持 Windows（依赖 WebView2 Runtime）。
+- **平台与测试范围**：目前只在 Windows 上测试过；**macOS / Linux 没有测试过，兼容性与运行情况未经验证**（详见顶部醒目声明）。当前实现依赖 Windows 专有组件（WebView2 Runtime、Win32 回收站 API 等），不是跨平台实现。
 - LevelDB 类客户端（ZCode、Grok Desktop、OpenCode 等）的对话正文暂未解析，仅统计目录体量。
 - 云端会话（豆包、即梦、Coze 等）在本地只有缓存，无法还原对话内容。
 - 清理候选是内存态，每次启动会重新识别一次（后台执行，不阻塞窗口）。
