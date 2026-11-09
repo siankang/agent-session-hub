@@ -350,15 +350,13 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
         <div class="kpis" id="cleanupKpis"></div>
         <div class="toolbar">
           <button class="btn primary" id="btnCleanupScan"><span class="spin" id="cleanupSpin" style="display:none"></span><span id="cleanupBtnText">重新分析（只读）</span></button>
-          <select class="inp" id="cCat">
+          <select class="inp" id="cSource" title="按 Agent 客户端筛选">
+            <option value="">全部 Agent</option>
+          </select>
+          <select class="inp" id="cCat" title="按清理类别筛选">
             <option value="">全部类别</option><option value="session">会话记录</option>
             <option value="memory">记忆文件</option><option value="cache">缓存 / 日志</option>
             <option value="database">会话数据库</option>
-          </select>
-          <select class="inp" id="cRisk">
-            <option value="">全部风险</option><option value="low">低</option>
-            <option value="medium">中</option><option value="high">高</option>
-            <option value="critical">极高</option>
           </select>
           <input class="inp search" id="cQ" placeholder="按路径筛选…">
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
@@ -753,8 +751,8 @@ const catColor={session:'#f0b458',memory:'#ef6b73',cache:'#2ecc8f',database:'#a7
 
 function cleanupParams(){
   const p=new URLSearchParams({page:C.page,size:C.size});
+  const src=$('#cSource').value; if(src)p.set('source',src);
   const cat=$('#cCat').value; if(cat)p.set('category',cat);
-  const risk=$('#cRisk').value; if(risk)p.set('risk',risk);
   const q=$('#cQ').value.trim(); if(q)p.set('q',q);
   if($('#cSuggested').checked)p.set('suggested','1');
   return p;
@@ -763,6 +761,14 @@ async function cleanupSummary(){
   try{
     const s=await api('/api/cleanup/summary'); C.summary=s;
     const bc=s.by_category||{};
+    // 第一个下拉：只列出实际有清理候选的 Agent 客户端
+    const srcSel=$('#cSource');
+    if(srcSel){
+      const cur=srcSel.value, list=Array.isArray(s.sources)?s.sources:[];
+      srcSel.innerHTML='<option value="">全部 Agent</option>'+list.map(x=>
+        `<option value="${esc(x.id)}">${esc(x.name)}（${nf(x.count)}）</option>`).join('');
+      if(cur && list.some(x=>x.id===cur)) srcSel.value=cur;
+    }
     $('#cleanupKpis').innerHTML=['session','memory','cache','database'].map(k=>{
       const v=bc[k]||{label:k,count:0,bytes:0,color:'#5b8cff'};
       return `<div class="kpi"><div class="lab">${esc(v.label)}</div>
@@ -943,7 +949,7 @@ document.addEventListener('click',e=>{
   }
 });
 $('#btnCleanupScan').addEventListener('click',cleanupScan);
-['#cCat','#cRisk','#cSuggested'].forEach(sel=>$(sel).addEventListener('change',()=>{C.page=1;cleanupItems();}));
+['#cSource','#cCat','#cSuggested'].forEach(sel=>$(sel).addEventListener('change',()=>{C.page=1;cleanupItems();}));
 $('#cQ').addEventListener('input',()=>{clearTimeout($('#cQ')._t);$('#cQ')._t=setTimeout(()=>{C.page=1;cleanupItems();},300);});
 $('#cleanupTable').addEventListener('change',e=>{
   const cb=e.target.closest('.citem'); if(!cb)return;

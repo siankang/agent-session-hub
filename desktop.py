@@ -210,7 +210,21 @@ window.addEventListener('pywebviewready', async () => {
     const cspin=document.querySelector('#cleanupSpin');
     const autoSpin=cspin?cspin.style.display:'';
     const autoRow=!!document.querySelector('.scanning-row');
+    // 轮询等后台统一识别真正结束（不依赖固定时长），再验证下拉被真实数据填充
+    let cs={sources:[]};
+    for(let i=0;i<90;i++){
+      cs=await window.pywebview.api.call('GET','/api/cleanup/summary');
+      const stx=await window.pywebview.api.call('GET','/api/cleanup/scan/status');
+      if(stx && !stx.running && cs && cs.sources && cs.sources.length>0) break;
+      await new Promise(r=>setTimeout(r,700));
+    }
+    await new Promise(r=>setTimeout(r,1500));   // 等前端轮询刷新下拉
+    const filters={source_options:document.querySelectorAll('#cSource option').length,
+                   backend_sources:(cs.sources||[]).length,
+                   category_options:document.querySelectorAll('#cCat option').length,
+                   risk_removed:!document.querySelector('#cRisk')};
     await window.pywebview.api.report('__selftest__', {
+      filters:filters,
       sessions:b.overview.sessions, sources:b.sources.length,
       rows:s.items.length, hits:q.items.length,
       post_ok:!!(pl&&pl.plan&&Array.isArray(pl.plan.items)),
@@ -331,7 +345,7 @@ def main():
     log(f"启动桌面窗口 | db={db} | cleanup={cleanup.allow_delete} | selftest={args.selftest}")
     if args.selftest:
         def _selftest():
-            for _ in range(60):
+            for _ in range(220):   # 自检含一次完整统一识别（约 25-60 秒）
                 if bridge.reports.get("__selftest__") or bridge.reports.get("__selftest_error__"):
                     break
                 time.sleep(0.5)

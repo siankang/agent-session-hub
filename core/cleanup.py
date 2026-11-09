@@ -309,14 +309,22 @@ class CleanupManager:
         by_cat = {k: {"label": v["label"], "count": 0, "bytes": 0, "color": v["color"]}
                   for k, v in CATEGORIES.items()}
         protected = oversized = 0
+        src_map = {}
         for it in self.items.values():
             c = by_cat[it["category"]]
             c["count"] += 1
             c["bytes"] += it["size"]
             protected += int(it["protected"])
             oversized += int(it["oversized"])
+            sid = it["source_id"]
+            if sid not in src_map:
+                src_map[sid] = {"id": sid, "name": it["source_name"], "count": 0}
+            src_map[sid]["count"] += 1
+        # 只列出实际有清理候选的 Agent，供界面「选择对应的 Agent」下拉使用
+        sources = sorted(src_map.values(), key=lambda x: (-x["count"], x["name"]))
         return {
             "by_category": by_cat,
+            "sources": sources,
             "total_items": len(self.items),
             "total_bytes": sum(i["size"] for i in self.items.values()),
             "protected": protected, "oversized": oversized,
