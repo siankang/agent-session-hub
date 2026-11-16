@@ -31,7 +31,7 @@
 
 ### 直接使用（推荐）
 
-从 [Releases](https://github.com/siankang/agent-session-hub/releases/tag/v0.0.1) 下载 `AgentSessionHub.exe`，双击运行。
+从 [Releases](https://github.com/siankang/agent-session-hub/releases/tag/v0.0.3) 下载 `AgentSessionHub.exe`，双击运行。
 
 - 首次启动会在后台做一次统一识别（约 20 秒，顶部有转圈进度）；完成后清理页直接有候选清单。
 - 依赖 Windows 10/11 自带的 **WebView2 Runtime**（绝大多数机器已内置）。
@@ -100,4 +100,8 @@ web/index.html  <->  core/bridge.py  <->  core/server.py (API.dispatch)
 
 ## 版本
 
-当前 [v0.0.1](https://github.com/siankang/agent-session-hub/releases/tag/v0.0.1)。
+当前 [v0.0.3](https://github.com/siankang/agent-session-hub/releases/tag/v0.0.3)。
+
+- **v0.0.3**：文件被占用时直接强制结束占用进程（不再等待优雅退出，系统级进程与工具自身/宿主链保护不变）；清理页新增「全选全部可清理项」（按当前筛选、无数量上限），移除单次执行 100 项上限；桌面看门狗改为持句柄轮询，避免宿主重挂载窗口时误判退出。
+- **v0.0.2**：统一识别、清理一次确认、按 Agent 筛选、桌面窗口稳定性修复。
+- **v0.0.1**：首个桌面版。
