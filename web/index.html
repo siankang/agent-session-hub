@@ -6,10 +6,12 @@
 <title>Agent 会话管理台</title>
 <style>
 :root{
-  --bg:#0d1016; --panel:#151922; --panel2:#1b202b; --line:#262d3a;
-  --text:#e7ebf3; --muted:#8b95a8; --dim:#5d6678;
-  --accent:#5b8cff; --accent2:#7c5cff; --green:#2ecc8f; --amber:#f0b458; --red:#ef6b73;
-  --radius:12px; --shadow:0 8px 30px rgba(0,0,0,.35);
+  /* DeskGrid shared tokens - see docs/design/shared-ui-tokens.md in the DeskGrid repo */
+  --bg:#18191C; --panel:#1E1F22; --panel2:#212226; --line:#34363B;
+  --text:#E4E7EB; --muted:#8C929B; --dim:#60656D;
+  --accent:#4E8DFF; --accent2:#7C9CFF; --green:#52C48A; --amber:#F0C464; --red:#E26A60;
+  --radius:10px; --shadow:0 8px 30px rgba(0,0,0,.35);
+  --surface:#212226; --hover:#2E3035; --title:#F5F6F8; --focus:#4E8DFF;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
@@ -225,6 +227,36 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
   .srcgrid{grid-template-columns:1fr}
   .topbar .badge{display:none}
 }
+
+/* ---- DeskGrid shared UI: typography ladder, spacing, interaction feedback ---- */
+html,body{font-family:"Microsoft YaHei UI","Segoe UI","PingFang SC",sans-serif;
+  font-size:14px;line-height:1.6}
+.brand h1{font-size:16px;font-weight:600;color:var(--title)}
+.brand p,.sidefoot,.badge,.tag,.kpi .sub,.row .meta,.axis,.empty{font-size:11px}
+.topbar h2{font-size:16px;font-weight:600}
+.card h3,.kpi .lab,.row .title{font-size:14px}
+.btn,.inp,.nav button,.row .pv{font-size:12.5px}
+.kpi .val{font-size:24px}
+.card,.kpi,.row,.drawer,.badge,.tag{border-radius:var(--radius)}
+.nav button:hover,.row:hover,.btn:hover{background:var(--hover)}
+.nav button:hover{color:var(--text)}
+.btn:hover{border-color:var(--accent);color:#fff}
+.nav button.on{background:linear-gradient(90deg,rgba(78,141,255,.18),rgba(124,156,255,.07));
+  box-shadow:inset 2px 0 0 var(--accent)}
+.btn:active,.row:active,.nav button:active{transform:translateY(1px)}
+.btn,.row,.nav button,.inp,.badge,.tag,.hbar .fl{
+  transition:background .15s ease,border-color .15s ease,color .15s ease,
+             transform .12s ease,filter .15s ease}
+.btn.primary:hover{filter:brightness(1.12)}
+button:focus-visible,input:focus-visible,select:focus-visible,
+.btn:focus-visible,.inp:focus-visible,.nav button:focus-visible,.row:focus-visible{
+  outline:2px solid var(--focus);outline-offset:2px}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(78,141,255,.16)}
+::-webkit-scrollbar-thumb{background:#3A3D44;border-radius:8px}
+::-webkit-scrollbar-thumb:hover{background:#4A4E57}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
 </style>
 </head>
 <body>
@@ -344,7 +376,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
       <section class="view" id="v-cleanup">
         <div class="warnbox danger">
           <b>⚠️ 此操作非常危险，可能导致不可逆的数据丢失！</b>
-          <p>本页默认<b>只读分析</b>，不会自动清理任何文件。执行清理需要：逐项勾选 → 核对完整路径 → 输入确认词；执行前会完整备份到 <code>backup/quarantine/</code>，再把原文件移入 Windows 回收站，之后可按批次还原。强烈建议先关闭对应的 Agent 客户端。身份文件、登录状态、本工具目录与系统个人目录一律受保护。</p>
+          <p>本页默认<b>只读分析</b>，不会自动清理任何文件。执行清理需要：逐项勾选 → 核对完整路径 → 输入确认词；执行前会完整备份到 <code>backup/quarantine/</code>，再把原文件移入 Windows 回收站，之后可按批次还原。强烈建议先关闭对应的 Agent 客户端：文件被占用时会直接强制结束占用它的程序（Windows 系统级进程除外），未保存的内容可能丢失。身份文件、登录状态、本工具目录与系统个人目录一律受保护。</p>
           <div id="cleanupMode" style="margin-top:10px"></div>
         </div>
         <div class="kpis" id="cleanupKpis"></div>
@@ -365,6 +397,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
         <div class="selbar">
           <label style="display:flex;align-items:center;gap:6px">
             <input type="checkbox" id="cAll" class="chk"> 全选本页可清理项</label>
+          <button class="btn sm" id="btnSelectAll" title="选中当前筛选下所有可清理项，不限本页、无数量上限">全选全部可清理项</button>
           <span id="cleanupSel">已选 <b>0</b> 项 · <b>0 B</b></span>
           <span style="flex:1"></span>
           <button class="btn" id="btnCleanupPlan" disabled>生成清理计划</button>
@@ -397,7 +430,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
           <h3>导出</h3>
           <p>会话列表页可把<b>当前筛选结果</b>导出为 Markdown 清单（不含消息正文，上限 1000 个会话）；点开某个会话后可单独导出该会话的 Markdown（含全部消息）或 JSON。批量导出不含正文，避免一次生成超大文件。桌面模式下会弹出系统「另存为」对话框，取消则自动保存到 <code>exports/</code>。</p>
           <h3>清理功能</h3>
-          <p>清理页把本机会话 / 记忆 / 缓存 / 会话数据库分成四类做只读分析，标注体积、风险与保护原因。软件<b>不会自动改动任何文件</b>；要执行清理只需：逐项勾选 → 生成计划并核对完整路径 → 输入「确认清理」 → 完整备份并校验 → 每批最多 10 项移入 Windows 回收站（失败立即停止）→ 可按批次还原。<b>没有额外解锁步骤，确认词是唯一关卡。</b></p>
+          <p>清理页把本机会话 / 记忆 / 缓存 / 会话数据库分成四类做只读分析，标注体积、风险与保护原因。软件<b>不会自动改动任何文件</b>；要执行清理只需：逐项勾选 → 生成计划并核对完整路径 → 输入「确认清理」 → 完整备份并校验（文件被占用则先结束占用进程再重试） → 每批最多 10 项移入 Windows 回收站（失败立即停止）→ 可按批次还原。<b>没有额外解锁步骤，确认词是唯一关卡，它同时授权结束占用进程。</b></p>
           <div class="warnbox danger"><b>⚠️ 此操作非常危险，可能导致不可逆的数据丢失！</b><br><span style="font-size:12px;color:var(--muted)">会话与记忆一旦被客户端覆盖或回收站被清空就无法找回。工具不会自动清理任何文件，也不会替你决定删什么；身份文件、登录状态、本工具目录与系统个人目录一律受保护。建议先关闭对应客户端，并保留 <code>backup/quarantine/</code> 备份。</span></div>
           <h3>已知边界</h3>
           <p>体量统计对每个来源最多抽样 <code>20000</code> 个文件，并跳过缓存 / node_modules / 运行时目录，超大目录可能低估；云端会话（豆包、即梦、Coze 等）本地通常只有缓存，无法还原对话。中文全文检索由 FTS5 与子串匹配双路合并，未做语义分词。</p>
@@ -844,9 +877,22 @@ async function cleanupItems(){
     updateCleanupSel();
   }catch(e){ $('#cleanupTable').innerHTML=`<tr><td colspan="8" class="empty">加载失败：${esc(e.message)}</td></tr>`; }
 }
+async function selectAllFiltered(){
+  if(!C.loaded){ toast('尚未生成清理候选，请先完成分析'); return; }
+  const btn=$('#btnSelectAll'); btn.disabled=true;
+  try{
+    const p=cleanupParams(); p.delete('page'); p.delete('size');
+    const r=await api('/api/cleanup/select_all?'+p);
+    if(r&&r.error){ toast('全选失败：'+r.error); return; }
+    (r.items||[]).forEach(it=>C.selected.set(it.id,{size:it.size,path:it.path}));
+    await cleanupItems();
+    toast(`已选中全部可清理项：${nf(r.count||0)} 项 · ${fmtB(r.bytes||0)}（受保护 / 超上限项已排除）`);
+  }catch(e){ toast('全选失败：'+e.message); }
+  finally{ btn.disabled=false; }
+}
 function updateCleanupSel(){
   let b=0; C.selected.forEach(v=>b+=v.size||0);
-  $('#cleanupSel').innerHTML=`已选 <b>${C.selected.size}</b> 项 · 预计释放 <b>${fmtB(b)}</b>`;
+  $('#cleanupSel').innerHTML=`已选 <b>${nf(C.selected.size)}</b> 项 · 预计释放 <b>${fmtB(b)}</b>`;
   $('#btnCleanupPlan').disabled=C.selected.size===0;
 }
 async function makePlan(){
@@ -857,29 +903,49 @@ async function makePlan(){
     C.plan=r.plan; const p=r.plan;
     $('#planBody').innerHTML=`
       <div class="warnbox danger" style="margin:0 0 12px"><b>⚠️ 此操作非常危险，可能导致不可逆的数据丢失！</b>
-        <p style="margin:6px 0 0;font-size:11.5px">以下 <b>${p.items.length}</b> 项将被移入 Windows 回收站，预计释放 <b>${fmtB(p.total_bytes)}</b>。请逐项核对下方完整路径，在底部输入「确认清理」即可执行（这是唯一确认步骤）。执行前会完整备份到 <code>backup/quarantine/&lt;批次号&gt;/</code> 并校验，按每批 10 项执行，任一失败立即停止。</p></div>
+        <p style="margin:6px 0 0;font-size:11.5px">以下 <b>${p.items.length}</b> 项将被移入 Windows 回收站，预计释放 <b>${fmtB(p.total_bytes)}</b>。请逐项核对下方完整路径，在底部输入「确认清理」即可执行（这是唯一确认步骤）。执行前会完整备份到 <code>backup/quarantine/&lt;批次号&gt;/</code> 并校验，按每批 10 项执行，任一失败立即停止。</p>
+        <p style="margin:6px 0 0;font-size:11.5px;color:var(--red)">输入确认词同时授权：文件被占用时直接强制结束占用它的程序（不等待程序自行退出），该程序里未保存的内容可能丢失。Windows 系统级进程、本工具自身与宿主进程不会被结束。</p></div>
       <div class="plist">${p.items.map(i=>`<div class="pi">${esc(i.path)} <span style="color:var(--dim)">· ${fmtB(i.size)} · ${catLabel[i.category]}</span></div>`).join('')}</div>
       ${p.rejected.length?`<div style="color:var(--amber);font-size:11.5px;margin-top:8px">已拒绝 ${p.rejected.length} 项：${p.rejected.slice(0,4).map(x=>esc(x.why)).join('、')}</div>`:''}`;
-    $('#planConfirm').value=''; $('#btnCleanupExecute').disabled=true;
+    $('#planConfirm').value=''; $('#planConfirm').style.display='';
+    $('#btnCleanupExecute').style.display=''; $('#btnCleanupExecute').disabled=true;
+    $('#btnPlanClose').textContent='取消';
     $('#planModal').classList.add('on');
   }catch(e){ toast('生成计划失败：'+e.message); }
 }
+function syncExecBtn(){
+  $('#btnCleanupExecute').disabled = !C.plan
+    || $('#planConfirm').value.trim()!==((C.summary&&C.summary.confirm_word)||'确认清理');
+}
 async function executeCleanup(){
-  if(!C.plan)return;
+  if(!C.plan){ toast('当前没有待执行的计划：请关闭本窗口，重新勾选后生成清理计划'); return; }
   const btn=$('#btnCleanupExecute'); btn.disabled=true; btn.textContent='执行中…';
   try{
     const r=await api('/api/cleanup/execute',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({plan_id:C.plan.id,confirm:$('#planConfirm').value})});
     if(!r.ok&&r.error){ toast(r.error); $('#planBody').insertAdjacentHTML('beforeend',`<div class="warnbox danger">${esc(r.error)}</div>`); }
     else{
-      $('#planBody').innerHTML=`<div class="okbox">✅ 批次 <b>${esc(r.batch_id)}</b>：成功 ${r.done} 项${r.failed.length?`，失败 ${r.failed.length} 项`:''}。<br>备份：<code>${esc(r.backup_root)}</code><br>${esc(r.note||'')}</div>
-        <div style="font-size:11.5px">如需恢复，请在下方「历史批次与还原」点击该批次的还原按钮。</div>`;
+      const fl=r.failed||[], ul=r.unlocked||[];
+      const ulHtml=ul.length?`<div style="font-size:11.5px;margin-top:8px">占用处理：${ul.map(a=>
+        `${esc(a.name)}（PID ${a.pid}）${esc(a.result)}${a.why?'：'+esc(a.why):''}`).join('；')}</div>`:'';
+      $('#planBody').innerHTML = r.ok
+        ? `<div class="okbox">✅ 批次 <b>${esc(r.batch_id)}</b>：成功 ${r.done} 项。<br>备份：<code>${esc(r.backup_root)}</code></div>
+        ${ulHtml}
+        <div style="font-size:11.5px">如需恢复，请在下方「历史批次与还原」点击该批次的还原按钮。</div>`
+        : `<div class="warnbox danger"><b>❌ 批次 ${esc(r.batch_id)}：成功 ${r.done} 项，失败 ${fl.length} 项</b>
+        <p>${esc(r.note||'')}<br>备份：<code>${esc(r.backup_root)}</code></p></div>
+        ${ulHtml}
+        <div class="plist">${fl.map(f=>`<div class="pi">${esc(f.path)}
+          <div style="color:var(--amber);margin-top:3px">${esc(f.stage)} 阶段失败：${esc(f.why)}</div></div>`).join('')}</div>
+        <div style="font-size:11.5px">占用进程会自动结束；仍失败通常是权限不足或系统级进程占用（系统进程不会结束）。处理原因后重新勾选并生成计划。已成功的项可在下方「历史批次与还原」还原。</div>`;
       C.selected.clear(); C.plan=null;
+      $('#planConfirm').value=''; $('#planConfirm').style.display='none';
+      $('#btnCleanupExecute').style.display='none';
+      $('#btnPlanClose').textContent='关闭';
       await cleanupSummary(); await cleanupItems(); await cleanupHistory();
     }
   }catch(e){ toast('执行失败：'+e.message); }
-  finally{ btn.textContent='执行清理';
-    btn.disabled = !C.plan || $('#planConfirm').value.trim()!==((C.summary&&C.summary.confirm_word)||'确认清理'); }
+  finally{ btn.textContent='执行清理'; syncExecBtn(); }
 }
 async function cleanupHistory(){
   try{
@@ -964,12 +1030,11 @@ $('#cAll').addEventListener('change',e=>{
     else C.selected.delete(it.id); });
   cleanupItems();
 });
+$('#btnSelectAll').addEventListener('click',selectAllFiltered);
 $('#btnCleanupPlan').addEventListener('click',makePlan);
 $('#btnPlanClose').addEventListener('click',()=>$('#planModal').classList.remove('on'));
 $('#planModal').addEventListener('click',e=>{ if(e.target.id==='planModal') $('#planModal').classList.remove('on'); });
-$('#planConfirm').addEventListener('input',e=>{
-  $('#btnCleanupExecute').disabled=e.target.value.trim()!==((C.summary&&C.summary.confirm_word)||'确认清理');
-});
+$('#planConfirm').addEventListener('input',syncExecBtn);
 $('#btnCleanupExecute').addEventListener('click',executeCleanup);
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){ $('#drawer').classList.remove('on');

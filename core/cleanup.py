@@ -3,10 +3,12 @@
 安全模型（不可绕过）：
 1. 扫描阶段 100% 只读，只产出清单与风险标注，绝不修改任何源文件。
 2. 用户必须逐项勾选 -> 生成服务端计划 -> 核对完整路径 -> 输入「确认清理」才执行；前端只能传 id，路径由服务端取。
-3. 无需额外解锁步骤；执行前仍强制确认词校验（唯一的用户确认关卡）。
+3. 无需额外解锁步骤；执行前仍强制确认词校验（唯一的用户确认关卡，它同时授权结束占用进程）。
 4. 执行前：路径白名单校验、保护名单校验、体积上限、磁盘空间检查、完整备份并校验。
-5. 删除走 Windows 回收站（SHFileOperationW + FOF_ALLOWUNDO），每批最多 10 项，失败立即停止。
-6. 每批写 manifest + 日志，可按批次从备份还原。
+5. 备份遇到文件占用：直接强制结束占用该文件的进程后重试一次（不等待程序自行退出）。
+   Windows 服务 / 系统级进程 / explorer、本工具自身与宿主进程一律不结束，跳过并如实报错。
+6. 删除走 Windows 回收站（SHFileOperationW + FOF_ALLOWUNDO），每批最多 10 项，失败立即停止。
+7. 每批写 manifest + 日志（含被结束的进程），可按批次从备份还原。
 
 本项目目录、Desktop / Downloads / Documents / 系统目录、身份与登录状态文件一律受保护。
 """
@@ -25,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .adapters import SOURCES
+from .unlock import locked_targets, release_file
 
 CATEGORIES = {
     "session": {"label": "会话记录", "risk": "high", "color": "#f0b458"},
@@ -135,6 +138,38 @@ def to_recycle_bin(path: Path):
         return True, "已移入回收站"
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
+
+
+def backup_with_unlock(src: Path, dst: Path):
+    """完整备份一项；确认是文件占用时直接强制结束占用进程后重试一次。
+
+    结束进程的授权来自用户输入的确认词（计划弹层已列明会关掉哪些程序的风险）。
+    系统级进程、本工具自身与宿主进程由 unlock 模块拦住，不会被结束。
+    """
+    def copy():
+        if src.is_dir():
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+        else:
+            shutil.copy2(src, dst)
+
+    try:
+        copy()
+        return True, "", []
+    except Exception as e:
+        targets = locked_targets(e)
+        why = f"{type(e).__name__}: {e}"
+    if not targets:
+        return False, why, []
+    actions = []
+    for t in targets:
+        actions.extend(release_file(Path(t))["actions"])
+    if not any(a["stopped"] for a in actions):
+        return False, why, actions
+    try:
+        copy()
+        return True, "", actions
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}", actions
 
 
 class CleanupManager:
@@ -356,6 +391,22 @@ class CleanupManager:
                 "page": page, "size": size}
 
     # ------------------------------------------------------------ 计划
+    def select_all_ids(self, *, category="", source="", risk="", q="",
+                       only_suggested=False) -> dict:
+        """按当前筛选返回全部可清理项 id（不限条数、不受分页限制）。
+
+        与列表同一套筛选逻辑；受保护 / 超上限的条目不返回。
+        仅供前端「全选全部」使用，执行仍要经过计划确认与确认词关卡。
+        """
+        rows = self.list_items(category=category, source=source, risk=risk, q=q,
+                               only_suggested=only_suggested, page=1,
+                               size=max(1, len(self.items)))["items"]
+        picked = [r for r in rows if not r["protected"] and not r["oversized"]]
+        return {"items": [{"id": r["id"], "size": r["size"], "path": r["path"]}
+                          for r in picked],
+                "count": len(picked),
+                "bytes": sum(r["size"] for r in picked)}
+
     def make_plan(self, ids: list[str]):
         picked, rejected = [], []
         for i in ids:
@@ -401,8 +452,7 @@ class CleanupManager:
         items = plan["items"]
         if not items:
             return {"ok": False, "error": "没有可执行的条目"}
-        if len(items) > 100:
-            return {"ok": False, "error": "单次最多 100 项，请分批执行"}
+        # 不设单次数量上限：全选全部时可一次执行，内部仍按每批 10 项备份->校验->回收站
 
         # 执行前总校验：全部路径重新过白名单 / 保护 / 存在性
         for it in items:
@@ -425,6 +475,7 @@ class CleanupManager:
         dest_root.mkdir(parents=True, exist_ok=True)
         done, failed, aborted = [], [], False
         note = ""
+        unlocked = []
 
         for start in range(0, len(items), BATCH_SIZE):
             batch = items[start:start + BATCH_SIZE]
@@ -434,14 +485,10 @@ class CleanupManager:
                 rel = Path(it["source_id"]) / src.name
                 dst = dest_root / rel
                 dst.parent.mkdir(parents=True, exist_ok=True)
-                try:
-                    if src.is_dir():
-                        shutil.copytree(src, dst, dirs_exist_ok=True)
-                    else:
-                        shutil.copy2(src, dst)
-                except Exception as e:
-                    failed.append({"path": str(src), "stage": "backup",
-                                   "why": f"{type(e).__name__}: {e}"})
+                ok, why, actions = backup_with_unlock(src, dst)
+                unlocked.extend(actions)
+                if not ok:
+                    failed.append({"path": str(src), "stage": "backup", "why": why})
                     aborted = True
                     break
             if aborted:
@@ -477,7 +524,7 @@ class CleanupManager:
             "batch_id": batch_id, "at": int(time.time() * 1000),
             "confirm": confirm, "total_bytes": plan["total_bytes"],
             "requested": len(items), "done": done, "failed": failed,
-            "note": note, "restored": False,
+            "note": note, "restored": False, "unlocked": unlocked,
             "backup_root": str(dest_root),
         }
         (dest_root / "manifest.json").write_text(
@@ -487,7 +534,7 @@ class CleanupManager:
             self.plans.pop(plan_id, None)
         return {"ok": len(failed) == 0, "batch_id": batch_id,
                 "done": len(done), "failed": failed, "note": note,
-                "backup_root": str(dest_root)}
+                "unlocked": unlocked, "backup_root": str(dest_root)}
 
     # ------------------------------------------------------------ 还原 / 历史
     def history(self):

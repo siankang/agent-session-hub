@@ -188,6 +188,11 @@ class API:
                                     risk=g("risk"), q=g("q"),
                                     only_suggested=g("suggested") == "1",
                                     page=page, size=size)
+            if p == "/api/cleanup/select_all":
+                # 全选全部：按当前筛选返回全部可清理 id，不受分页 / 条数限制
+                return c.select_all_ids(category=g("category"), source=g("source"),
+                                        risk=g("risk"), q=g("q"),
+                                        only_suggested=g("suggested") == "1")
             if p == "/api/cleanup/plan" and method == "POST":
                 return c.make_plan(body.get("ids") or [])
             if p == "/api/cleanup/execute" and method == "POST":

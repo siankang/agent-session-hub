@@ -25,5 +25,9 @@ dist/
 __pycache__/
 *.py[cod]
 
+# 本地打包虚拟环境
+.venv/
+venv/
+
 # WorkBuddy 工作区数据
 .workbuddy/

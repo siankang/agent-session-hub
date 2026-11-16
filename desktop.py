@@ -167,18 +167,31 @@ def _exit_watchdog(title: str):
     """用户点 X 关闭窗口后，WinForms/.NET 残留线程可能让进程不退出。
 
     检测到窗口消失即直接结束进程；SQLite WAL 的数据在每次 commit 时已落盘。
+
+    DeskGrid mounts this window with SetParent. A reparented window is no longer a top-level
+    window, so FindWindowW(None, title) stops finding it even though it is alive: the old loop
+    then killed a perfectly running program. Remember the HWND once and poll IsWindow instead,
+    exactly like the independent watchdog above.
     """
     try:
         import ctypes
+        from ctypes import wintypes
         u = ctypes.windll.user32
+        u.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+        u.FindWindowW.restype = wintypes.HWND
+        u.IsWindow.argtypes = [wintypes.HWND]
+        u.IsWindow.restype = wintypes.BOOL
+
+        hwnd = 0
         for _ in range(60):                 # 先等窗口真正出现，避免启动期误判
-            if u.FindWindowW(None, title):
+            hwnd = u.FindWindowW(None, title)
+            if hwnd:
                 break
             time.sleep(0.5)
         else:
             return
         while True:
-            if not u.FindWindowW(None, title):
+            if not u.IsWindow(hwnd):
                 log("窗口已关闭（watchdog），结束进程")
                 os._exit(0)
             time.sleep(0.5)
@@ -256,8 +269,21 @@ try{
 """
 
 
+def ui_file() -> Path:
+    """Prefer the UI next to the exe, fall back to the copy embedded by PyInstaller.
+
+    DeskGrid mounts this program into its function area and keeps a shared token set in
+    docs/design/shared-ui-tokens.md. Reading the external file first means a theme update is a
+    file edit, not a rebuild; the frozen bundle still works standalone when the folder is absent.
+    """
+    external = APP_DIR / "web" / "index.html"
+    if external.is_file():
+        return external
+    return RES / "web" / "index.html"
+
+
 def build_html(selftest: bool = False) -> str:
-    p = RES / "web" / "index.html"
+    p = ui_file()
     html = p.read_text(encoding="utf-8")
     # 告诉前端当前是桌面模式：走 JS 桥接而不是 fetch，且隐藏网页相关提示
     html = html.replace("</head>",
@@ -322,7 +348,7 @@ def main():
     window = webview.create_window(
         title, html=html, js_api=bridge,
         width=1360, height=880, min_size=(980, 640),
-        background_color="#0D1016", resizable=True,
+        background_color="#18191C", resizable=True,
         text_select=True, confirm_close=False,
     )
     # 刻意不把 Window 传给 Bridge（见 core/bridge.py 注释），避免 UI 线程卡死
